@@ -52,7 +52,7 @@ func (n *Node) makeName() string {
 	return cleanName(n.name) + spaceTag
 }
 
-func (n *Node) makeType(prefix string, suffix string) string {
+func (n *Node) makeType(prefix string, suffix string, keepXmlFirstLetterCase bool) string {
 	return goVariableNameSanitize(capitalizeFirstLetter(makeTypeGeneric(n.name, n.spaceTag, prefix, suffix, !keepXmlFirstLetterCase)) + n.renderSpaceTag())
 }
 
@@ -64,7 +64,7 @@ func (n *Node) renderSpaceTag() string {
 	}
 }
 
-func (n *Node) makeJavaType(prefix string, suffix string) string {
+func (n *Node) makeJavaType(prefix string, suffix string, keepXmlFirstLetterCase bool) string {
 	return capitalizeFirstLetter(makeTypeGeneric(n.name, n.spaceTag, prefix, suffix, !keepXmlFirstLetterCase))
 }
 

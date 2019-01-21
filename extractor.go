@@ -34,6 +34,8 @@ type Extractor struct {
 	initted                 bool
 	tokenChannel            chan xml.Token
 	handleTokensDoneChannel chan bool
+	ignoredXmlTagsMap       *map[string]struct{}
+	ignoreLowerCaseXmlTags  bool
 }
 
 const RootName = "ChidleyRoot314159"
@@ -125,7 +127,7 @@ func handleTokens(ex *Extractor) {
 			}
 			thisNode = ex.handleStartElement(element, thisNode)
 			thisNode.tempCharData = ""
-			thisNode.ignoredTag = isIgnoredTag(element.Name.Local)
+			thisNode.ignoredTag = isIgnoredTag(element.Name.Local, ex.ignoredXmlTagsMap, ex.ignoreLowerCaseXmlTags)
 
 			if first {
 				first = false

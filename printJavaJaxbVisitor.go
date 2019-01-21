@@ -10,14 +10,15 @@ import (
 )
 
 type PrintJavaJaxbVisitor struct {
-	alreadyVisited      map[string]bool
-	globalTagAttributes map[string]([]*FQN)
-	nameSpaceTagMap     map[string]string
-	useType             bool
-	javaDir             string
-	javaPackage         string
-	namePrefix          string
-	Date                time.Time
+	alreadyVisited         map[string]bool
+	globalTagAttributes    map[string]([]*FQN)
+	nameSpaceTagMap        map[string]string
+	useType                bool
+	javaDir                string
+	javaPackage            string
+	namePrefix             string
+	keepXmlFirstLetterCase bool
+	Date                   time.Time
 }
 
 func (v *PrintJavaJaxbVisitor) Visit(node *Node) bool {
@@ -63,7 +64,7 @@ func (v *PrintJavaJaxbVisitor) Visit(node *Node) bool {
 		}
 		jaf.NameSpace = child.space
 		jaf.Repeats = child.repeats
-		jaf.TypeName = child.makeJavaType(v.namePrefix, "")
+		jaf.TypeName = child.makeJavaType(v.namePrefix, "", v.keepXmlFirstLetterCase)
 		class.Fields = append(class.Fields, jaf)
 
 	}

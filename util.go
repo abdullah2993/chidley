@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"sort"
+
 	//"strconv"
 	"strings"
 	"unicode"
@@ -119,7 +120,7 @@ func isStringOnlyField(n *Node, nattributes int) bool {
 	return (len(n.children) == 0 && nattributes == 0)
 }
 
-func makeAttributes(writer io.Writer, attributes []*FQN, nameSpaceTagMap map[string]string) {
+func makeAttributes(writer io.Writer, attributes []*FQN, nameSpaceTagMap map[string]string, attributePrefix string) {
 	sort.Sort(fqnSorter(attributes))
 
 	for _, fqn := range attributes {
@@ -260,7 +261,7 @@ func containsUnicodeSpace(s string) bool {
 	return false
 }
 
-func isIgnoredTag(tag string) bool {
+func isIgnoredTag(tag string, ignoredXmlTagsMap *map[string]struct{}, ignoreLowerCaseXmlTags bool) bool {
 	var ignored bool
 	if ignoredXmlTagsMap == nil {
 		return false
@@ -295,6 +296,8 @@ func extractExcludedTags(tagsString string) (*map[string]struct{}, error) {
 }
 
 func findFieldNameFromTypeInfo(t string) string {
+	var cdataNumberName = "Number"
+	var cdataBooleanName = "Flag"
 	switch t {
 	case IntType, Int8Type, Int16Type, Int32Type, Int64Type, Float32Type, Float64Type:
 		return cdataNumberName

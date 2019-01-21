@@ -13,6 +13,27 @@ import (
 )
 
 func extractor(xmlStrings []string) error {
+	var attributePrefix = "Attr"
+	var nameSpaceInJsonName = false
+
+	var ignoreLowerCaseXmlTags = false
+	var ignoredXmlTagsMap *map[string]struct{}
+
+	var ignoreXmlDecodingErrors = false
+
+	// Java out
+	const javaBasePackage = "ca.gnewton.chidley"
+	const mavenJavaBase = "src/main/java"
+
+	var namePrefix = "C"
+	var nameSuffix = ""
+
+	var useType = false
+	var flattenStrings = false
+
+	//FIXXX: should not be global
+	var keepXmlFirstLetterCase = true
+
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	ex := Extractor{
 		namePrefix:              namePrefix,
@@ -20,6 +41,8 @@ func extractor(xmlStrings []string) error {
 		useType:                 useType,
 		progress:                progress,
 		ignoreXmlDecodingErrors: ignoreXmlDecodingErrors,
+		ignoreLowerCaseXmlTags:  ignoreLowerCaseXmlTags,
+		ignoredXmlTagsMap:       ignoredXmlTagsMap,
 	}
 
 	ex.init()
@@ -38,7 +61,7 @@ func extractor(xmlStrings []string) error {
 	buf := bytes.NewBufferString("")
 	fps := make([]string, 1)
 	//fps[0] = "foo"
-	generateGoCode(buf, fps, &ex)
+	generateGoCode(buf, fps, &ex, flattenStrings, useType, keepXmlFirstLetterCase, nameSpaceInJsonName, namePrefix, nameSuffix, attributePrefix)
 
 	//log.Println(buf.String())
 

@@ -12,15 +12,20 @@ type PrintGoStructVisitor struct {
 	alreadyVisitedNodes map[string]*Node
 	globalTagAttributes map[string]([]*FQN)
 
-	maxDepth            int
-	depth               int
-	nameSpaceTagMap     map[string]string
-	useType             bool
-	nameSpaceInJsonName bool
-	writer              io.Writer
+	maxDepth               int
+	depth                  int
+	nameSpaceTagMap        map[string]string
+	useType                bool
+	nameSpaceInJsonName    bool
+	flattenStrings         bool
+	writer                 io.Writer
+	namePrefix             string
+	nameSuffix             string
+	attributePrefix        string
+	keepXmlFirstLetterCase bool
 }
 
-func (v *PrintGoStructVisitor) init(writer io.Writer, maxDepth int, globalTagAttributes map[string]([]*FQN), nameSpaceTagMap map[string]string, useType bool, nameSpaceInJsonName bool) {
+func (v *PrintGoStructVisitor) init(writer io.Writer, maxDepth int, globalTagAttributes map[string]([]*FQN), nameSpaceTagMap map[string]string, flattenStrings, useType bool, nameSpaceInJsonName bool, namePrefix, nameSuffix, attributePrefix string, keepXmlFirstLetterCase bool) {
 	v.alreadyVisited = make(map[string]bool)
 	v.alreadyVisitedNodes = make(map[string]*Node)
 	v.globalTagAttributes = make(map[string]([]*FQN))
@@ -31,6 +36,10 @@ func (v *PrintGoStructVisitor) init(writer io.Writer, maxDepth int, globalTagAtt
 	v.nameSpaceTagMap = nameSpaceTagMap
 	v.useType = useType
 	v.nameSpaceInJsonName = nameSpaceInJsonName
+	v.namePrefix = namePrefix
+	v.nameSuffix = nameSuffix
+	v.attributePrefix = attributePrefix
+	v.keepXmlFirstLetterCase = keepXmlFirstLetterCase
 }
 
 func (v *PrintGoStructVisitor) Visit(node *Node) bool {
@@ -54,14 +63,14 @@ func print(v *PrintGoStructVisitor, node *Node) error {
 	if node.ignoredTag || node.name == "" {
 		return nil
 	}
-	if flattenStrings && isStringOnlyField(node, len(v.globalTagAttributes[nk(node)])) {
+	if v.flattenStrings && isStringOnlyField(node, len(v.globalTagAttributes[nk(node)])) {
 		//v.lineChannel <- "//type " + node.makeType(namePrefix, nameSuffix)
 		return nil
 	}
 
 	attributes := v.globalTagAttributes[nk(node)]
 	//v.lineChannel <- "type " + node.makeType(namePrefix, nameSuffix) + " struct {"
-	fmt.Fprintln(v.writer, "type "+node.makeType(namePrefix, nameSuffix)+" struct {")
+	fmt.Fprintln(v.writer, "type "+node.makeType(v.namePrefix, v.nameSuffix, v.keepXmlFirstLetterCase)+" struct {")
 
 	//	fmt.Fprintln(v.writer, "\tXMLName xml.Name`"+makeXmlAnnotation(node.space, false, node.name)+" "+makeJsonAnnotation(node.spaceTag, false, node.name)+"`")
 
@@ -69,7 +78,7 @@ func print(v *PrintGoStructVisitor, node *Node) error {
 
 	//return makeAnnotation("xml", spaceTag, true, false, name)
 
-	makeAttributes(v.writer, attributes, v.nameSpaceTagMap)
+	makeAttributes(v.writer, attributes, v.nameSpaceTagMap, v.attributePrefix)
 
 	err := v.printInternalFields(len(attributes), node)
 	if err != nil {
@@ -102,17 +111,17 @@ func (v *PrintGoStructVisitor) printInternalFields(nattributes int, n *Node) err
 			continue
 		}
 		var def FieldDef
-		if flattenStrings && isStringOnlyField(child, len(v.globalTagAttributes[nk(child)])) {
+		if v.flattenStrings && isStringOnlyField(child, len(v.globalTagAttributes[nk(child)])) {
 			//field = "\t" + child.spaceTag + child.makeType(namePrefix, nameSuffix) + " string `" + makeXmlAnnotation(child.space, false, child.name) + "`" //+ "   // ********* " + lengthTagName + ":\"" + lengthTagAttribute + lengthTagSeparator + strconv.FormatInt(child.nodeTypeInfo.maxLength+lengthTagPadding, 10) + "\""
-			def.GoName = child.makeType(namePrefix, nameSuffix)
+			def.GoName = child.makeType(v.namePrefix, v.nameSuffix, v.keepXmlFirstLetterCase)
 			//def.GoType = "string"
-			def.GoType = findType(child.nodeTypeInfo, useType)
+			def.GoType = findType(child.nodeTypeInfo, v.useType)
 			def.XMLName = child.name
 			def.XMLNameSpace = child.space
 		} else {
 
 			// Field name and type are the same: i.e. Person *Person or Persons []Persons
-			nameAndType := child.makeType(namePrefix, nameSuffix)
+			nameAndType := child.makeType(v.namePrefix, v.nameSuffix, v.keepXmlFirstLetterCase)
 
 			def.GoName = nameAndType
 			def.GoType = nameAndType
@@ -125,7 +134,7 @@ func (v *PrintGoStructVisitor) printInternalFields(nattributes int, n *Node) err
 				def.GoTypeArrayOrPointer = "*"
 			}
 		}
-		if flattenStrings {
+		if v.flattenStrings {
 			def.Length = child.nodeTypeInfo.maxLength
 		}
 		fieldDefString, err := render(def)
@@ -138,12 +147,12 @@ func (v *PrintGoStructVisitor) printInternalFields(nattributes int, n *Node) err
 	// Is this chardata Field (string)
 	if n.hasCharData {
 		xmlString := " `xml:\",chardata\" " + makeJsonAnnotation("", false, "") + "`"
-		thisType := findType(n.nodeTypeInfo, useType)
+		thisType := findType(n.nodeTypeInfo, v.useType)
 		thisVariableName := findFieldNameFromTypeInfo(thisType)
 
 		charField := "\t" + thisVariableName + " " + thisType + xmlString
 
-		if flattenStrings {
+		if v.flattenStrings {
 			//charField += "// maxLength=" + strconv.FormatInt(n.nodeTypeInfo.maxLength, 10)
 			if len(n.children) == 0 && nattributes == 0 {
 				charField += "// *******************"

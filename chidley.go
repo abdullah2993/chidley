@@ -14,82 +14,129 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"text/template"
 	"time"
 )
 
-func init() {
-
-	flag.BoolVar(&DEBUG, "d", DEBUG, "Debug; prints out much information")
-	flag.BoolVar(&addDbMetadata, "B", addDbMetadata, "Add database metadata to created Go structs")
-	flag.BoolVar(&classicStructNamesWithUnderscores, "C", classicStructNamesWithUnderscores, "Structs have underscores instead of CamelCase; how chidley used to produce output; includes name spaces (see -n)")
-	flag.BoolVar(&codeGenConvert, "W", codeGenConvert, "Generate Go code to convert XML to JSON or XML (latter useful for validation) and write it to stdout")
-	flag.BoolVar(&flattenStrings, "F", flattenStrings, "Assume complete representative XML and collapse tags with only a single string and no attributes")
-	flag.BoolVar(&ignoreXmlDecodingErrors, "I", ignoreXmlDecodingErrors, "If XML decoding error encountered, continue")
-	flag.BoolVar(&nameSpaceInJsonName, "n", nameSpaceInJsonName, "Use the XML namespace prefix as prefix to JSON name")
-	flag.BoolVar(&prettyPrint, "p", prettyPrint, "Pretty-print json in generated code (if applicable)")
-	flag.BoolVar(&progress, "r", progress, "Progress: every 50000 input tags (elements)")
-	flag.BoolVar(&readFromStandardIn, "c", readFromStandardIn, "Read XML from standard input")
-	flag.BoolVar(&sortByXmlOrder, "X", sortByXmlOrder, "Sort output of structs in Go code by order encounered in source XML (default is alphabetical order)")
-	flag.BoolVar(&structsToStdout, "G", structsToStdout, "Only write generated Go structs to stdout")
-	flag.BoolVar(&url, "u", url, "Filename interpreted as an URL")
-	flag.BoolVar(&useType, "t", useType, "Use type info obtained from XML (int, bool, etc); default is to assume everything is a string; better chance at working if XMl sample is not complete")
-	flag.BoolVar(&writeJava, "J", writeJava, "Generated Java code for Java/JAXB")
-	flag.BoolVar(&xmlName, "x", xmlName, "Add XMLName (Space, Local) for each XML element, to JSON")
-	flag.BoolVar(&keepXmlFirstLetterCase, "K", keepXmlFirstLetterCase, "Do not change the case of the first letter of the XML tag names")
-	flag.BoolVar(&validateFieldTemplate, "m", validateFieldTemplate, "Validate the field template. Useful to make sure the template defined with -T is valid")
-
-	flag.BoolVar(&ignoreLowerCaseXmlTags, "L", ignoreLowerCaseXmlTags, "Ignore lower case XML tags")
-
-	flag.StringVar(&attributePrefix, "a", attributePrefix, "Prefix to attribute names")
-	flag.StringVar(&baseJavaDir, "D", baseJavaDir, "Base directory for generated Java code (root of maven project)")
-	flag.StringVar(&cdataStringName, "M", cdataStringName, "Set name of CDATA string field")
-	flag.StringVar(&fieldTemplateString, "T", fieldTemplateString, "Field template for the struct field definition. Can include annotations. Default is for XML and JSON")
-	flag.StringVar(&javaAppName, "k", javaAppName, "App name for Java code (appended to ca.gnewton.chidley Java package name))")
-	flag.StringVar(&lengthTagAttribute, "A", lengthTagAttribute, "The tag name attribute to use for the max length Go annotations")
-	flag.StringVar(&lengthTagName, "N", lengthTagName, "The tag name to use for the max length Go annotations")
-	flag.StringVar(&lengthTagSeparator, "S", lengthTagSeparator, "The tag name separator to use for the max length Go annotations")
-	flag.StringVar(&namePrefix, "e", namePrefix, "Prefix to struct (element) names; must start with a capital")
-	flag.StringVar(&userJavaPackageName, "P", userJavaPackageName, "Java package name (rightmost in full package name")
-
-	flag.StringVar(&ignoredXmlTags, "h", ignoredXmlTags, "List of XML tags to ignore; comma separated")
-
-	flag.Int64Var(&lengthTagPadding, "Z", lengthTagPadding, "The padding on the max length tag attribute")
-
-}
-
-func handleParameters() error {
-	flag.Parse()
-
-	if codeGenConvert || writeJava {
-		structsToStdout = false
-	}
-
-	numBoolsSet := countNumberOfBoolsSet(outputs)
-	if numBoolsSet > 1 {
-		log.Print("  ERROR: Only one of -W -J -X -V -c can be set")
-	} else if numBoolsSet == 0 {
-		log.Print("  ERROR: At least one of -W -J -X -V -c must be set")
-	}
-	if sortByXmlOrder {
-		structSort = printStructsByXml
-	}
-
-	var err error
-	ignoredXmlTagsMap, err = extractExcludedTags(ignoredXmlTags)
-	if err != nil {
-		return err
-	}
-
-	if lengthTagName == "" && lengthTagAttribute == "" || lengthTagName != "" && lengthTagAttribute != "" {
-		return nil
-	}
-
-	return errors.New("Both lengthTagName and lengthTagAttribute must be set")
-}
-
 func main() {
+
+	var attributePrefix = "Attr"
+	var codeGenConvert = false
+	var classicStructNamesWithUnderscores = false
+	var nameSpaceInJsonName = false
+	var prettyPrint = false
+	var readFromStandardIn = false
+	var sortByXmlOrder = false
+	var structsToStdout = true
+	var validateFieldTemplate = false
+
+	var ignoreLowerCaseXmlTags = false
+	var ignoredXmlTags = ""
+	var ignoredXmlTagsMap *map[string]struct{}
+
+	var ignoreXmlDecodingErrors = false
+	// Java out
+	const javaBasePackage = "ca.gnewton.chidley"
+	const mavenJavaBase = "src/main/java"
+
+	var javaBasePackagePath = strings.Replace(javaBasePackage, ".", "/", -1)
+	var javaAppName = "jaxb"
+	var writeJava = false
+	var baseJavaDir = "java"
+	var userJavaPackageName = ""
+
+	var namePrefix = "C"
+	var nameSuffix = ""
+	var xmlName = false
+	var url = false
+	var useType = false
+	var addDbMetadata = false
+	var flattenStrings = false
+
+	//FIXXX: should not be global
+	var keepXmlFirstLetterCase = true
+
+	var lengthTagName = ""
+	var lengthTagPadding int64 = 0
+	var lengthTagAttribute = ""
+	var lengthTagSeparator = ":"
+
+	var cdataStringName = "Text"
+
+	var outputs = []*bool{
+		&codeGenConvert,
+		&structsToStdout,
+		&writeJava,
+	}
+
+	handleParameters := func() error {
+
+		flag.BoolVar(&DEBUG, "d", DEBUG, "Debug; prints out much information")
+		flag.BoolVar(&addDbMetadata, "B", addDbMetadata, "Add database metadata to created Go structs")
+		flag.BoolVar(&classicStructNamesWithUnderscores, "C", classicStructNamesWithUnderscores, "Structs have underscores instead of CamelCase; how chidley used to produce output; includes name spaces (see -n)")
+		flag.BoolVar(&codeGenConvert, "W", codeGenConvert, "Generate Go code to convert XML to JSON or XML (latter useful for validation) and write it to stdout")
+		flag.BoolVar(&flattenStrings, "F", flattenStrings, "Assume complete representative XML and collapse tags with only a single string and no attributes")
+		flag.BoolVar(&ignoreXmlDecodingErrors, "I", ignoreXmlDecodingErrors, "If XML decoding error encountered, continue")
+		flag.BoolVar(&nameSpaceInJsonName, "n", nameSpaceInJsonName, "Use the XML namespace prefix as prefix to JSON name")
+		flag.BoolVar(&prettyPrint, "p", prettyPrint, "Pretty-print json in generated code (if applicable)")
+		flag.BoolVar(&progress, "r", progress, "Progress: every 50000 input tags (elements)")
+		flag.BoolVar(&readFromStandardIn, "c", readFromStandardIn, "Read XML from standard input")
+		flag.BoolVar(&sortByXmlOrder, "X", sortByXmlOrder, "Sort output of structs in Go code by order encounered in source XML (default is alphabetical order)")
+		flag.BoolVar(&structsToStdout, "G", structsToStdout, "Only write generated Go structs to stdout")
+		flag.BoolVar(&url, "u", url, "Filename interpreted as an URL")
+		flag.BoolVar(&useType, "t", useType, "Use type info obtained from XML (int, bool, etc); default is to assume everything is a string; better chance at working if XMl sample is not complete")
+		flag.BoolVar(&writeJava, "J", writeJava, "Generated Java code for Java/JAXB")
+		flag.BoolVar(&xmlName, "x", xmlName, "Add XMLName (Space, Local) for each XML element, to JSON")
+		flag.BoolVar(&keepXmlFirstLetterCase, "K", keepXmlFirstLetterCase, "Do not change the case of the first letter of the XML tag names")
+		flag.BoolVar(&validateFieldTemplate, "m", validateFieldTemplate, "Validate the field template. Useful to make sure the template defined with -T is valid")
+
+		flag.BoolVar(&ignoreLowerCaseXmlTags, "L", ignoreLowerCaseXmlTags, "Ignore lower case XML tags")
+
+		flag.StringVar(&attributePrefix, "a", attributePrefix, "Prefix to attribute names")
+		flag.StringVar(&baseJavaDir, "D", baseJavaDir, "Base directory for generated Java code (root of maven project)")
+		flag.StringVar(&cdataStringName, "M", cdataStringName, "Set name of CDATA string field")
+		flag.StringVar(&fieldTemplateString, "T", fieldTemplateString, "Field template for the struct field definition. Can include annotations. Default is for XML and JSON")
+		flag.StringVar(&javaAppName, "k", javaAppName, "App name for Java code (appended to ca.gnewton.chidley Java package name))")
+		flag.StringVar(&lengthTagAttribute, "A", lengthTagAttribute, "The tag name attribute to use for the max length Go annotations")
+		flag.StringVar(&lengthTagName, "N", lengthTagName, "The tag name to use for the max length Go annotations")
+		flag.StringVar(&lengthTagSeparator, "S", lengthTagSeparator, "The tag name separator to use for the max length Go annotations")
+		flag.StringVar(&namePrefix, "e", namePrefix, "Prefix to struct (element) names; must start with a capital")
+		flag.StringVar(&userJavaPackageName, "P", userJavaPackageName, "Java package name (rightmost in full package name")
+
+		flag.StringVar(&ignoredXmlTags, "h", ignoredXmlTags, "List of XML tags to ignore; comma separated")
+
+		flag.Int64Var(&lengthTagPadding, "Z", lengthTagPadding, "The padding on the max length tag attribute")
+
+		flag.Parse()
+
+		if codeGenConvert || writeJava {
+			structsToStdout = false
+		}
+
+		numBoolsSet := countNumberOfBoolsSet(outputs)
+		if numBoolsSet > 1 {
+			log.Print("  ERROR: Only one of -W -J -X -V -c can be set")
+		} else if numBoolsSet == 0 {
+			log.Print("  ERROR: At least one of -W -J -X -V -c must be set")
+		}
+		if sortByXmlOrder {
+			structSort = printStructsByXml
+		}
+
+		var err error
+		ignoredXmlTagsMap, err = extractExcludedTags(ignoredXmlTags)
+		if err != nil {
+			return err
+		}
+
+		if lengthTagName == "" && lengthTagAttribute == "" || lengthTagName != "" && lengthTagAttribute != "" {
+			return nil
+		}
+
+		return errors.New("Both lengthTagName and lengthTagAttribute must be set")
+	}
 	//log.Println(fieldTemplateString)
 
 	//EXP()
@@ -145,6 +192,8 @@ func main() {
 		progress:                progress,
 		ignoreXmlDecodingErrors: ignoreXmlDecodingErrors,
 		initted:                 false,
+		ignoreLowerCaseXmlTags:  ignoreLowerCaseXmlTags,
+		ignoredXmlTagsMap:       ignoredXmlTagsMap,
 	}
 
 	if DEBUG {
@@ -175,10 +224,10 @@ func main() {
 
 	switch {
 	case codeGenConvert:
-		generateGoCode(os.Stdout, sourceNames, &ex)
+		generateGoCode(os.Stdout, sourceNames, &ex, flattenStrings, useType, keepXmlFirstLetterCase, nameSpaceInJsonName, namePrefix, nameSuffix, attributePrefix)
 
 	case structsToStdout:
-		generateGoStructs(os.Stdout, sourceNames[0], &ex)
+		generateGoStructs(os.Stdout, sourceNames[0], &ex, flattenStrings, useType, keepXmlFirstLetterCase, nameSpaceInJsonName, namePrefix, nameSuffix, attributePrefix)
 
 	case writeJava:
 		if len(userJavaPackageName) > 0 {
@@ -191,14 +240,15 @@ func main() {
 		os.MkdirAll(javaDir+"/xml", 0755)
 		date := time.Now()
 		printJavaJaxbVisitor := PrintJavaJaxbVisitor{
-			alreadyVisited:      make(map[string]bool),
-			globalTagAttributes: ex.globalTagAttributes,
-			nameSpaceTagMap:     ex.nameSpaceTagMap,
-			useType:             useType,
-			javaDir:             javaDir,
-			javaPackage:         javaPackage,
-			namePrefix:          namePrefix,
-			Date:                date,
+			alreadyVisited:         make(map[string]bool),
+			globalTagAttributes:    ex.globalTagAttributes,
+			nameSpaceTagMap:        ex.nameSpaceTagMap,
+			useType:                useType,
+			javaDir:                javaDir,
+			javaPackage:            javaPackage,
+			namePrefix:             namePrefix,
+			keepXmlFirstLetterCase: keepXmlFirstLetterCase,
+			Date:                   date,
 		}
 
 		var onlyChild *Node
@@ -211,7 +261,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		printJavaJaxbMain(onlyChild.makeJavaType(namePrefix, ""), javaDir, javaPackage, fullPath, date)
+		printJavaJaxbMain(onlyChild.makeJavaType(namePrefix, "", keepXmlFirstLetterCase), javaDir, javaPackage, fullPath, date)
 		printPackageInfo(onlyChild, javaDir, javaPackage, ex.globalTagAttributes, ex.nameSpaceTagMap)
 
 		printMavenPom(baseJavaDir+"/pom.xml", javaAppName)
@@ -368,7 +418,7 @@ func countNumberOfBoolsSet(a []*bool) int {
 	return counter
 }
 
-func makeOneLevelDown(node *Node, globalTagAttributes map[string]([]*FQN)) []*XMLType {
+func makeOneLevelDown(node *Node, globalTagAttributes map[string]([]*FQN), flattenStrings, keepXmlFirstLetterCase bool, namePrefix, nameSuffix string) []*XMLType {
 	var children []*XMLType
 
 	for _, np := range node.children {
@@ -382,7 +432,7 @@ func makeOneLevelDown(node *Node, globalTagAttributes map[string]([]*FQN)) []*XM
 			if flattenStrings && isStringOnlyField(n, len(globalTagAttributes[nk(n)])) {
 				continue
 			}
-			x := XMLType{NameType: n.makeType(namePrefix, nameSuffix),
+			x := XMLType{NameType: n.makeType(namePrefix, nameSuffix, keepXmlFirstLetterCase),
 				XMLName:      n.name,
 				XMLNameUpper: capitalizeFirstLetter(n.name),
 				XMLSpace:     n.space}
@@ -437,24 +487,24 @@ func printStructsAlphabetical(v *PrintGoStructVisitor) error {
 
 }
 
-func generateGoStructs(out io.Writer, sourceName string, ex *Extractor) {
+func generateGoStructs(out io.Writer, sourceName string, ex *Extractor, flattenStrings, useType, keepXmlFirstLetterCase, nameSpaceInJsonName bool, namePrefix, nameSuffix, attributePrefix string) {
 	printGoStructVisitor := new(PrintGoStructVisitor)
 
-	printGoStructVisitor.init(os.Stdout, 999, ex.globalTagAttributes, ex.nameSpaceTagMap, useType, nameSpaceInJsonName)
+	printGoStructVisitor.init(os.Stdout, 999, ex.globalTagAttributes, ex.nameSpaceTagMap, flattenStrings, useType, nameSpaceInJsonName, namePrefix, nameSuffix, attributePrefix, keepXmlFirstLetterCase)
 	printGoStructVisitor.Visit(ex.root)
 	structSort(printGoStructVisitor)
 }
 
-//Writes structs to a string then uses this in a template to generate Go code
-func generateGoCode(out io.Writer, sourceNames []string, ex *Extractor) error {
+//Writes structs to a string then uses this in a template to generate Go codes
+func generateGoCode(out io.Writer, sourceNames []string, ex *Extractor, flattenStrings, useType, keepXmlFirstLetterCase, nameSpaceInJsonName bool, namePrefix, nameSuffix, attributePrefix string) error {
 	buf := bytes.NewBufferString("")
 	printGoStructVisitor := new(PrintGoStructVisitor)
-	printGoStructVisitor.init(buf, 9999, ex.globalTagAttributes, ex.nameSpaceTagMap, useType, nameSpaceInJsonName)
+	printGoStructVisitor.init(buf, 9999, ex.globalTagAttributes, ex.nameSpaceTagMap, flattenStrings, useType, nameSpaceInJsonName, namePrefix, nameSuffix, attributePrefix, keepXmlFirstLetterCase)
 	printGoStructVisitor.Visit(ex.root)
 
 	structSort(printGoStructVisitor)
 
-	xt := XMLType{NameType: ex.firstNode.makeType(namePrefix, nameSuffix),
+	xt := XMLType{NameType: ex.firstNode.makeType(namePrefix, nameSuffix, keepXmlFirstLetterCase),
 		XMLName:      ex.firstNode.name,
 		XMLNameUpper: capitalizeFirstLetter(ex.firstNode.name),
 		XMLSpace:     ex.firstNode.space,
@@ -471,7 +521,7 @@ func generateGoCode(out io.Writer, sourceNames []string, ex *Extractor) error {
 	}
 	x := XmlInfo{
 		BaseXML:         &xt,
-		OneLevelDownXML: makeOneLevelDown(ex.root, ex.globalTagAttributes),
+		OneLevelDownXML: makeOneLevelDown(ex.root, ex.globalTagAttributes, flattenStrings, keepXmlFirstLetterCase, namePrefix, nameSuffix),
 		Filenames:       fullPaths,
 		Filename:        fullPath,
 		Structs:         buf.String(),
