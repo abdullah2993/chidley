@@ -24,9 +24,7 @@ func main() {
 
 	var attributePrefix = "Attr"
 	var codeGenConvert = false
-	var classicStructNamesWithUnderscores = false
 	var nameSpaceInJsonName = false
-	var prettyPrint = false
 	var readFromStandardIn = false
 	var sortByXmlOrder = false
 	var structsToStdout = true
@@ -49,21 +47,15 @@ func main() {
 
 	var namePrefix = "C"
 	var nameSuffix = ""
-	var xmlName = false
 	var url = false
 	var useType = false
-	var addDbMetadata = false
 	var flattenStrings = false
 
 	//FIXXX: should not be global
 	var keepXmlFirstLetterCase = true
 
 	var lengthTagName = ""
-	var lengthTagPadding int64 = 0
 	var lengthTagAttribute = ""
-	var lengthTagSeparator = ":"
-
-	var cdataStringName = "Text"
 
 	var outputs = []*bool{
 		&codeGenConvert,
@@ -74,13 +66,10 @@ func main() {
 	handleParameters := func() error {
 
 		flag.BoolVar(&DEBUG, "d", DEBUG, "Debug; prints out much information")
-		flag.BoolVar(&addDbMetadata, "B", addDbMetadata, "Add database metadata to created Go structs")
-		flag.BoolVar(&classicStructNamesWithUnderscores, "C", classicStructNamesWithUnderscores, "Structs have underscores instead of CamelCase; how chidley used to produce output; includes name spaces (see -n)")
 		flag.BoolVar(&codeGenConvert, "W", codeGenConvert, "Generate Go code to convert XML to JSON or XML (latter useful for validation) and write it to stdout")
 		flag.BoolVar(&flattenStrings, "F", flattenStrings, "Assume complete representative XML and collapse tags with only a single string and no attributes")
 		flag.BoolVar(&ignoreXmlDecodingErrors, "I", ignoreXmlDecodingErrors, "If XML decoding error encountered, continue")
 		flag.BoolVar(&nameSpaceInJsonName, "n", nameSpaceInJsonName, "Use the XML namespace prefix as prefix to JSON name")
-		flag.BoolVar(&prettyPrint, "p", prettyPrint, "Pretty-print json in generated code (if applicable)")
 		flag.BoolVar(&progress, "r", progress, "Progress: every 50000 input tags (elements)")
 		flag.BoolVar(&readFromStandardIn, "c", readFromStandardIn, "Read XML from standard input")
 		flag.BoolVar(&sortByXmlOrder, "X", sortByXmlOrder, "Sort output of structs in Go code by order encounered in source XML (default is alphabetical order)")
@@ -88,7 +77,6 @@ func main() {
 		flag.BoolVar(&url, "u", url, "Filename interpreted as an URL")
 		flag.BoolVar(&useType, "t", useType, "Use type info obtained from XML (int, bool, etc); default is to assume everything is a string; better chance at working if XMl sample is not complete")
 		flag.BoolVar(&writeJava, "J", writeJava, "Generated Java code for Java/JAXB")
-		flag.BoolVar(&xmlName, "x", xmlName, "Add XMLName (Space, Local) for each XML element, to JSON")
 		flag.BoolVar(&keepXmlFirstLetterCase, "K", keepXmlFirstLetterCase, "Do not change the case of the first letter of the XML tag names")
 		flag.BoolVar(&validateFieldTemplate, "m", validateFieldTemplate, "Validate the field template. Useful to make sure the template defined with -T is valid")
 
@@ -96,18 +84,14 @@ func main() {
 
 		flag.StringVar(&attributePrefix, "a", attributePrefix, "Prefix to attribute names")
 		flag.StringVar(&baseJavaDir, "D", baseJavaDir, "Base directory for generated Java code (root of maven project)")
-		flag.StringVar(&cdataStringName, "M", cdataStringName, "Set name of CDATA string field")
 		flag.StringVar(&fieldTemplateString, "T", fieldTemplateString, "Field template for the struct field definition. Can include annotations. Default is for XML and JSON")
 		flag.StringVar(&javaAppName, "k", javaAppName, "App name for Java code (appended to ca.gnewton.chidley Java package name))")
 		flag.StringVar(&lengthTagAttribute, "A", lengthTagAttribute, "The tag name attribute to use for the max length Go annotations")
 		flag.StringVar(&lengthTagName, "N", lengthTagName, "The tag name to use for the max length Go annotations")
-		flag.StringVar(&lengthTagSeparator, "S", lengthTagSeparator, "The tag name separator to use for the max length Go annotations")
 		flag.StringVar(&namePrefix, "e", namePrefix, "Prefix to struct (element) names; must start with a capital")
 		flag.StringVar(&userJavaPackageName, "P", userJavaPackageName, "Java package name (rightmost in full package name")
 
 		flag.StringVar(&ignoredXmlTags, "h", ignoredXmlTags, "List of XML tags to ignore; comma separated")
-
-		flag.Int64Var(&lengthTagPadding, "Z", lengthTagPadding, "The padding on the max length tag attribute")
 
 		flag.Parse()
 
